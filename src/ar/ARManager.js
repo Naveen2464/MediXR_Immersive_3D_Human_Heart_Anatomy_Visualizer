@@ -24,16 +24,11 @@ export class ARManager {
   // Check if immersive AR is supported on the device
   async checkAvailability() {
     if (navigator.xr) {
-      try {
-        const supported = await navigator.xr.isSessionSupported('immersive-ar');
-        const btn = document.getElementById('btn-ar');
-        if (supported && btn) {
-          btn.classList.remove('disabled');
-          btn.removeAttribute('disabled');
-          console.log("ARManager: Immersive AR is supported.");
-        }
-      } catch (err) {
-        console.warn("ARManager: Error checking AR availability: ", err);
+      const btn = document.getElementById('btn-ar');
+      if (btn) {
+        btn.classList.remove('disabled');
+        btn.removeAttribute('disabled');
+        console.log("ARManager: WebXR detected. Enabling AR button.");
       }
     }
   }

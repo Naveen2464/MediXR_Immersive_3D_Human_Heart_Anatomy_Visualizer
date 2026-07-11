@@ -29,16 +29,11 @@ export class VRManager {
   // Check if immersive VR is supported on the device
   async checkAvailability() {
     if (navigator.xr) {
-      try {
-        const supported = await navigator.xr.isSessionSupported('immersive-vr');
-        const btn = document.getElementById('btn-vr');
-        if (supported && btn) {
-          btn.classList.remove('disabled');
-          btn.removeAttribute('disabled');
-          console.log("VRManager: Immersive VR is supported.");
-        }
-      } catch (err) {
-        console.warn("VRManager: Error checking VR availability: ", err);
+      const btn = document.getElementById('btn-vr');
+      if (btn) {
+        btn.classList.remove('disabled');
+        btn.removeAttribute('disabled');
+        console.log("VRManager: WebXR detected. Enabling VR button.");
       }
     }
   }
@@ -219,11 +214,15 @@ export class VRManager {
     this.engine.scene.add(this.vrEnvironment);
   }
 
-  // Adjusts the VR environment and heart coordinates dynamically after startup space is resolved
+    // Adjusts the VR environment and heart coordinates dynamically after startup space is resolved
   adjustEnvironmentHeight(isFloorSpace) {
     // Keep environment relative to camera origin (eye level) for guaranteed visibility across all devices
     const floorY = isFloorSpace ? 0.0 : -1.6;
     const heartY = isFloorSpace ? 1.3 : 0.0;
+
+    if (this.cameraRig) {
+      this.cameraRig.position.y = isFloorSpace ? 1.2 : 0.0;
+    }
 
     // Clear any active selection repositioning caches to align with new space coordinates
     this.engine.preSelectionHeartPosition = null;

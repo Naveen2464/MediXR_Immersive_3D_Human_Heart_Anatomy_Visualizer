@@ -1366,25 +1366,11 @@ body.xr-vr-active canvas {
   background-color: transparent !important;
 }
 
-/* Hide Zappar WebXR polyfill default launch/UI buttons and tap indicators (blue ring click) */
+/* Hide only Zappar WebXR polyfill default launch buttons so they don't block our custom HUD triggers */
 #zappar-button,
-#zappar-ui,
 .zappar-button,
-.zappar-ui,
 [id*="zappar-button"],
-[class*="zappar-button"],
-[id*="zappar-ui"],
-[class*="zappar-ui"],
-[id*="zappar-placement"],
-[class*="zappar-placement"],
-[id*="zappar_placement"],
-[class*="zappar_placement"],
-[class*="zappar"] svg,
-[id*="zappar"] svg,
-div[class*="zappar-dialog"],
-div[id*="zappar-dialog"],
-svg[class*="zappar"],
-svg[id*="zappar"] {
+[class*="zappar-button"] {
   display: none !important;
   visibility: hidden !important;
   opacity: 0 !important;
