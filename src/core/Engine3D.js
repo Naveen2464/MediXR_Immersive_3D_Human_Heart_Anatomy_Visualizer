@@ -44,6 +44,7 @@ export class Engine3D {
     this.targetInfoPanelRotationY = undefined;
     this.wasGrabbed = false;
     this.xrReferenceSpaceType = 'local';
+    this.lastTriggeredBeatIndex = -1;
 
     this.skeletonGroup = null;
     this.heartGroup = null;
@@ -265,7 +266,7 @@ export class Engine3D {
 
       // Scale down the heart in simulated AR/VR/XR modes so it fits the viewport & podium perfectly (0.6x)
       if (this.heartGroup) {
-        this.heartGroup.scale.set(0.6, 0.6, 0.6);
+        this.heartGroup.scale.set(0.15, 0.15, 0.15);
         this.heartGroup.position.set(0, 0.6, 0);
       }
       if (this.controls) {
@@ -412,12 +413,20 @@ export class Engine3D {
       }
       if (this.heartGroup) {
         this.heartGroup.visible = true; // Enforce heart visibility
-        // Scale heart small to fit inside the ribcage
-        this.heartGroup.scale.set(0.04, 0.03, 0.04);
 
-        // Position inside the chest cavity
-        // Set coordinates to center it inside the ribcage (X = 0.0, Y = 1.37, Z = -0.08)
-        this.heartGroup.position.set(0.0, 1.45, -0.08);
+        // Scale and position based on whether the skeleton is procedural or realistic
+        const isProcedural = this.skeletonGroup && this.skeletonGroup.userData && this.skeletonGroup.userData.isProcedural;
+        if (isProcedural) {
+          // Centered inside procedural ribcage
+          this.heartGroup.scale.set(0.06, 0.05, 0.06);
+          this.heartGroup.position.set(0.0, 0.5, 0.1);
+        } else {
+          // Scale heart small to fit inside realistic GLB ribcage
+          this.heartGroup.scale.set(0.04, 0.03, 0.04);
+          // Set coordinates to center it inside the ribcage (X = 0.0, Y = 1.37, Z = -0.08)
+          this.heartGroup.position.set(0.0, 1.45, -0.08);
+        }
+
         if (this.skeletonGroup) {
           this.skeletonGroup.add(this.heartGroup);
         }
@@ -441,7 +450,7 @@ export class Engine3D {
         if (!isXR) {
           if (this.appMode === 'ar' || this.appMode === 'vr' || this.appMode === 'xr') {
             // XR modes: smaller heart floating at standing eye level
-            this.heartGroup.scale.set(0.6, 0.6, 0.6);
+            this.heartGroup.scale.set(0.15, 0.15, 0.15);
             this.heartGroup.position.set(0, 0.6, 0);
           } else {
             // Desktop: scale to fill viewport
@@ -792,56 +801,79 @@ export class Engine3D {
         }
       }
 
-      // Make selected parts fully visible and highlighted, and make non-matching parts
-      // semi-transparent so the rest of the heart remains visible (contextual visualization)
-      this.heartGroup.traverse(node => {
-        if (node.isMesh) {
-          const meshNameId = node.userData ? node.userData.nameId : null;
-
-          // Check parent hierarchy too (for sub-meshes of groups like aorta branches)
-          let parentNameId = null;
-          let parentNode = node.parent;
-          while (parentNode && parentNode !== this.heartGroup) {
-            if (parentNode.userData && parentNode.userData.nameId) {
-              parentNameId = parentNode.userData.nameId;
-              break;
-            }
-            parentNode = parentNode.parent;
-          }
-
-          const isMatch = (meshNameId === nameId) || (parentNameId === nameId);
-
-          const mats = Array.isArray(node.material) ? node.material : [node.material];
-          mats.forEach(mat => {
-            if (mat) {
-              if (isMatch) {
-                // Keep the selected region at original opacity/color, but fully visible
-                mat.transparent = true;
-                mat.opacity = 1.0;
-                if (mat.userData && mat.userData.originalEmissive !== undefined && mat.emissive) {
-                  mat.emissive.setHex(mat.userData.originalEmissive);
+      if (this.appMode === 'vr') {
+        // VR Mode: Show the entire heart fully visible when information is showed, do not change any visibility/transparency
+        this.heartGroup.traverse(node => {
+          if (node.isMesh) {
+            node.visible = true;
+            const mats = Array.isArray(node.material) ? node.material : [node.material];
+            mats.forEach(mat => {
+              if (mat && mat.userData) {
+                const od = mat.userData;
+                if (od.originalOpacity !== undefined) mat.opacity = od.originalOpacity;
+                if (od.originalEmissive !== undefined && mat.emissive) mat.emissive.setHex(od.originalEmissive);
+                if (od.originalEmissiveIntensity !== undefined && mat.emissiveIntensity !== undefined) {
+                  mat.emissiveIntensity = od.originalEmissiveIntensity;
                 }
-                if (mat.emissiveIntensity !== undefined && mat.userData) {
-                  const origIntensity = mat.userData.originalEmissiveIntensity !== undefined ? mat.userData.originalEmissiveIntensity : 0.35;
-                  mat.emissiveIntensity = Math.min(origIntensity * 2.0, 1.0);
-                }
-              } else {
-                // Completely hide non-selected parts to isolate the selected part
-                mat.transparent = true;
-                mat.opacity = 0.0;
-                if (mat.emissive) mat.emissive.setHex(0x000000);
-                if (mat.emissiveIntensity !== undefined) mat.emissiveIntensity = 0.0;
+                mat.needsUpdate = true;
               }
-              mat.needsUpdate = true;
-            }
-          });
-          node.visible = isMatch; // Only show matching meshes
+            });
+          }
+        });
+        if (this.particles) {
+          this.particles.visible = this.isFlowing;
         }
-      });
+      } else {
+        // Desktop/AR: Completely hide non-selected parts to isolate the selected part
+        this.heartGroup.traverse(node => {
+          if (node.isMesh) {
+            const meshNameId = node.userData ? node.userData.nameId : null;
 
-      // Temporarily hide particles while showing only one selected part
-      if (this.particles) {
-        this.particles.visible = false;
+            // Check parent hierarchy too (for sub-meshes of groups like aorta branches)
+            let parentNameId = null;
+            let parentNode = node.parent;
+            while (parentNode && parentNode !== this.heartGroup) {
+              if (parentNode.userData && parentNode.userData.nameId) {
+                parentNameId = parentNode.userData.nameId;
+                break;
+              }
+              parentNode = parentNode.parent;
+            }
+
+            const isMatch = (meshNameId === nameId) || (parentNameId === nameId);
+
+            const mats = Array.isArray(node.material) ? node.material : [node.material];
+            mats.forEach(mat => {
+              if (mat) {
+                if (isMatch) {
+                  // Keep the selected region at original opacity/color, but fully visible
+                  mat.transparent = true;
+                  mat.opacity = 1.0;
+                  if (mat.userData && mat.userData.originalEmissive !== undefined && mat.emissive) {
+                    mat.emissive.setHex(mat.userData.originalEmissive);
+                  }
+                  if (mat.emissiveIntensity !== undefined && mat.userData) {
+                    const origIntensity = mat.userData.originalEmissiveIntensity !== undefined ? mat.userData.originalEmissiveIntensity : 0.35;
+                    mat.emissiveIntensity = Math.min(origIntensity * 2.0, 1.0);
+                  }
+                } else {
+                  // Completely hide non-selected parts to isolate the selected part
+                  mat.transparent = true;
+                  mat.opacity = 0.0;
+                  if (mat.emissive) mat.emissive.setHex(0x000000);
+                  if (mat.emissiveIntensity !== undefined) mat.emissiveIntensity = 0.0;
+                }
+                mat.needsUpdate = true;
+              }
+            });
+            node.visible = isMatch; // Only show matching meshes
+          }
+        });
+
+        // Temporarily hide particles while showing only one selected part
+        if (this.particles) {
+          this.particles.visible = false;
+        }
       }
 
       // Highlight the target mesh itself
@@ -934,6 +966,7 @@ export class Engine3D {
     } else {
       this.setVisualizerMode('focused');
     }
+    this.setExplodedMode(false);
   }
 
   // Config modifier setters
@@ -1399,6 +1432,29 @@ export class Engine3D {
       });
     }
 
+    // Trigger VR controller haptic pulses in sync with heartbeat animation (lub-dub pulse)
+    if (this.appMode === 'vr' && this.isBeating && this.vrManager) {
+      const period = 60 / this.bpm;
+      const phase = (elapsedTime % period) / period;
+      const beatIndex = Math.floor(elapsedTime / period);
+
+      // Ventricular systole pulse (Lub)
+      if (beatIndex !== this.lastTriggeredBeatIndex && phase > 0.18 && phase < 0.24) {
+        this.lastTriggeredBeatIndex = beatIndex;
+        // Trigger vibration on VR controllers
+        this.vrManager.triggerVRHaptic(this.vrManager.controller1, 0.65, 90);
+        this.vrManager.triggerVRHaptic(this.vrManager.controller2, 0.65, 90);
+
+        // Diastolic/Atrial rebound pulse (Dub) after a short latency delay
+        setTimeout(() => {
+          if (this.appMode === 'vr' && this.isBeating && this.vrManager) {
+            this.vrManager.triggerVRHaptic(this.vrManager.controller1, 0.35, 70);
+            this.vrManager.triggerVRHaptic(this.vrManager.controller2, 0.35, 70);
+          }
+        }, 220);
+      }
+    }
+
     // 5. Update HTML Label coordinates projecting on screen
     this.updateLabelsProjection();
 
@@ -1760,7 +1816,6 @@ export class Engine3D {
 
     // Row 2
     drawButton(this.isTransparency ? 'Transparency: ON' : 'Transparency: OFF', 120, 420, 600, 132, this.isTransparency);
-    drawButton(this.isExploded ? 'Exploded View: ON' : 'Exploded View: OFF', 816, 420, 600, 132, this.isExploded);
 
     // Row 3
     drawButton(this.showLabels ? 'Anatomy Labels: ON' : 'Anatomy Labels: OFF', 120, 600, 600, 132, this.showLabels);
@@ -1818,18 +1873,7 @@ export class Engine3D {
         ? "Transparency mode is now ACTIVE. Outer muscular tissue becomes translucent, revealing the internal chambers, valves, and blood flow paths in real-time."
         : "Transparency mode is now DISABLED. Fully opaque muscular walls are restored, showing the external vascular structures and fat layers of the heart.";
     }
-    else if (x >= 272 && x <= 472 && y >= 140 && y <= 184) {
-      const newState = !this.isExploded;
-      this.setExplodedMode(newState);
-      const explodedSwitch = document.getElementById('switch-exploded');
-      if (explodedSwitch) explodedSwitch.checked = newState;
 
-      toggled = true;
-      titleText = "Exploded View Mode";
-      descriptionText = newState
-        ? "Exploded View is now ACTIVE. Key anatomical sections (ventricles, atria, aorta, etc.) expand outwards along offset vectors to show spatial assembly details."
-        : "Exploded View is now DISABLED. All sections translate back to their original integrated positions to display the fully assembled anatomical structure.";
-    }
     // Row 3
     else if (x >= 40 && x <= 240 && y >= 200 && y <= 244) {
       const newState = !this.showLabels;
@@ -1854,8 +1898,7 @@ export class Engine3D {
       if (rotSlider) rotSlider.value = 0.0;
       const transSwitch = document.getElementById('switch-transparency');
       if (transSwitch) transSwitch.checked = false;
-      const explodedSwitch = document.getElementById('switch-exploded');
-      if (explodedSwitch) explodedSwitch.checked = false;
+
       const labelsSwitch = document.getElementById('switch-labels');
       if (labelsSwitch) labelsSwitch.checked = true;
 

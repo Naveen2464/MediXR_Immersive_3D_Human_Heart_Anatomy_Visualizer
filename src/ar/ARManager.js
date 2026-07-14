@@ -90,9 +90,9 @@ export class ARManager {
         this.engine.scene.add(this.engine.heartGroup); // Ensure attached to main scene
         // Default to local space chest height (y=0.0) first
         this.engine.heartGroup.position.set(0, 0.0, -1.2);
-        this.engine.heartGroup.scale.set(0.4, 0.4, 0.4);
+        this.engine.heartGroup.scale.set(0.13, 0.13, 0.13);
         this.engine.heartGroup.rotation.set(0, 0, 0);
-        this.engine.heartGroup.visible = false; // Hide until placed
+        this.engine.heartGroup.visible = true; // Show immediately in front of user
       }
 
       // Query reference space asynchronously without blocking the main WebXR session startup thread
@@ -122,6 +122,7 @@ export class ARManager {
       }
 
       if (hitTestAvailable) {
+        this.isPlaced = false;
         // Setup reticle indicator for surface placement
         this.createReticle();
 
@@ -392,6 +393,7 @@ export class ARManager {
     
     if (this.engine.heartGroup) {
       this.engine.heartGroup.position.copy(position);
+      this.engine.heartGroup.scale.set(0.13, 0.13, 0.13); // Ensure correct scale is set
       this.engine.heartGroup.visible = true;
       console.log("ARManager: Heart placed in physical environment at ", position);
     }
@@ -427,9 +429,24 @@ export class ARManager {
       this.reticle.visible = false; // Keep reticle invisible to remove blue click indicator
       this.reticle.matrix.fromArray(pose.transform.matrix);
       this.hasHitPose = true;
+
+      // Show heart dynamically at the detected hit position with correct scale
+      if (this.engine.heartGroup) {
+        const position = new THREE.Vector3();
+        position.setFromMatrixPosition(this.reticle.matrix);
+        position.y += 0.3; // float slightly above target
+        this.engine.heartGroup.position.copy(position);
+        this.engine.heartGroup.scale.set(0.13, 0.13, 0.13);
+        this.engine.heartGroup.visible = true;
+      }
     } else {
       this.reticle.visible = false;
       this.hasHitPose = false;
+
+      // Keep heart visible at its default position when no hit test pose is resolved yet
+      if (!this.isPlaced && this.engine.heartGroup) {
+        this.engine.heartGroup.visible = true;
+      }
     }
   }
 
@@ -609,6 +626,9 @@ export class ARManager {
     // Reset background and heart transforms
     this.engine.scene.background = new THREE.Color(0x050a12);
     if (this.engine.heartGroup) {
+      this.engine.heartGroup.position.set(0, 0.2, 0);
+      this.engine.heartGroup.scale.set(1.0, 1.0, 1.0);
+      this.engine.heartGroup.rotation.set(0, 0, 0);
       this.engine.heartGroup.visible = true;
     }
     

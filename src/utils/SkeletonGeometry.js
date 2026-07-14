@@ -86,6 +86,7 @@ export function createProceduralSkeleton() {
 
   // Position skeleton nicely centered
   skeletonGroup.position.set(0, 0.3, 0);
+  skeletonGroup.userData = { isProcedural: true };
   
   return skeletonGroup;
 }

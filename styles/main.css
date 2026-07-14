@@ -55,6 +55,9 @@
   margin: 0;
   padding: 0;
   user-select: none;
+  -webkit-tap-highlight-color: transparent !important;
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0) !important;
+  outline: none !important;
 }
 
 html,
@@ -1341,14 +1344,33 @@ input[type="range"]:disabled::-webkit-slider-thumb {
   box-shadow: var(--shadow-neon);
 }
 
-/* Hide standard 2D HUD when in active immersive VR mode to prevent screen clipping in stereo rendering */
+/* Hide standard 2D HUD when in active immersive VR/AR modes to prevent viewport obstruction */
 .xr-vr-active .hud-sidebar,
 .xr-vr-active .hud-top-bar,
 .xr-vr-active .hud-bottom-nav,
 .xr-vr-active .mode-banner,
 .xr-vr-active .modal-overlay,
-.xr-vr-active .ar-instructions {
+.xr-vr-active .ar-instructions,
+.xr-ar-active .hud-bottom-nav {
   display: none !important;
+}
+
+/* Ensure HUD overlays are interactive and visible in active AR mode */
+body.xr-ar-active .hud-layer {
+  pointer-events: none !important;
+  z-index: 2147483647 !important;
+}
+
+body.xr-ar-active .hud-top-bar,
+body.xr-ar-active .hud-sidebar,
+body.xr-ar-active .xr-mode-selector,
+body.xr-ar-active .quick-utilities,
+body.xr-ar-active .xr-btn,
+body.xr-ar-active .util-btn,
+body.xr-ar-active .collapse-btn,
+body.xr-ar-active .primary-btn {
+  pointer-events: auto !important;
+  z-index: 2147483647 !important;
 }
 
 /* Ensure WebXR canvas transparency is visible over HTML layouts */
@@ -1366,11 +1388,15 @@ body.xr-vr-active canvas {
   background-color: transparent !important;
 }
 
-/* Hide only Zappar WebXR polyfill default launch buttons so they don't block our custom HUD triggers */
+/* Hide only Zappar WebXR polyfill default launch buttons and placement UI, keeping permission dialogs active */
 #zappar-button,
 .zappar-button,
 [id*="zappar-button"],
-[class*="zappar-button"] {
+[class*="zappar-button"],
+[id*="zappar-placement"],
+[class*="zappar-placement"],
+[id*="zappar_placement"],
+[class*="zappar_placement"] {
   display: none !important;
   visibility: hidden !important;
   opacity: 0 !important;

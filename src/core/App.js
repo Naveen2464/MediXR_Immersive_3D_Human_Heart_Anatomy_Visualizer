@@ -72,7 +72,7 @@ function setupXRSessionListeners() {
       engine.appMode = 'ar';
       // AR: notify screen reader, collapse side panels
       accessibility.announceToScreenReader("Entered AR Mode. Scan your surroundings to place the heart.");
-      document.getElementById('panel-left').classList.add('collapsed');
+      document.getElementById('panel-left').classList.remove('collapsed');
       document.getElementById('panel-right').classList.add('collapsed');
     } else if (mode === 'immersive-vr') {
       if (btnVr) btnVr.classList.add('active');

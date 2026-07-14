@@ -6,7 +6,7 @@ export class VRManager {
   constructor(engine) {
     this.engine = engine;
     this.session = null;
-    
+
     // VR specific environment objects
     this.vrEnvironment = null;
     this.controllers = [];
@@ -39,7 +39,7 @@ export class VRManager {
   }
 
   // Start the VR session
-   async startSession() {
+  async startSession() {
     if (!navigator.xr) return;
     try {
       this.session = await navigator.xr.requestSession('immersive-vr', {
@@ -47,11 +47,11 @@ export class VRManager {
       });
 
       console.log("VRManager: WebXR VR session started.");
-      
+
       // Force renderer to be fully opaque for VR mode (fixes iOS WebXR transparency stereo bugs)
       this.engine.renderer.setClearColor(0x050a12, 1.0);
       this.engine.renderer.setClearAlpha(1.0);
-      
+
       // Default to 'local' reference space type synchronously to start the session immediately
       this.engine.setReferenceSpaceType('local');
       this.engine.renderer.xr.setSession(this.session);
@@ -71,7 +71,7 @@ export class VRManager {
       if (this.engine.heartGroup) {
         this.engine.scene.add(this.engine.heartGroup); // Ensure attached to main scene
         this.engine.heartGroup.position.set(0, 0.0, -2.5);
-        this.engine.heartGroup.scale.set(0.8, 0.8, 0.8);
+        this.engine.heartGroup.scale.set(0.1, 0.1, 0.1);
         this.engine.heartGroup.visible = true; // Ensure visibility
       }
 
@@ -85,7 +85,7 @@ export class VRManager {
         console.warn("VRManager: 'local-floor' not available. Keeping 'local' space layout.");
         this.adjustEnvironmentHeight(false);
       });
-      
+
       this.session.addEventListener('end', () => this.endSession());
       document.body.classList.add('xr-vr-active');
 
@@ -104,9 +104,9 @@ export class VRManager {
   onInputSourcesChange(event) {
     for (const source of event.added) {
       console.log(`VRManager: Controller connected — handedness: ${source.handedness}, profiles: [${source.profiles.join(', ')}]`);
-      
+
       // Detect Zapbox-specific input profile
-      const isZapbox = source.profiles.some(p => 
+      const isZapbox = source.profiles.some(p =>
         p.includes('zapbox') || p.includes('zappar')
       );
       if (isZapbox) {
@@ -197,8 +197,8 @@ export class VRManager {
     const starPositions = new Float32Array(starCount * 3);
     for (let i = 0; i < starCount * 3; i += 3) {
       starPositions[i] = (Math.random() - 0.5) * 16;
-      starPositions[i+1] = Math.random() * 6 + floorY;
-      starPositions[i+2] = (Math.random() - 0.5) * 16;
+      starPositions[i + 1] = Math.random() * 6 + floorY;
+      starPositions[i + 2] = (Math.random() - 0.5) * 16;
     }
     starGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
     const starMat = new THREE.PointsMaterial({
@@ -214,7 +214,7 @@ export class VRManager {
     this.engine.scene.add(this.vrEnvironment);
   }
 
-    // Adjusts the VR environment and heart coordinates dynamically after startup space is resolved
+  // Adjusts the VR environment and heart coordinates dynamically after startup space is resolved
   adjustEnvironmentHeight(isFloorSpace) {
     // Keep environment relative to camera origin (eye level) for guaranteed visibility across all devices
     const floorY = isFloorSpace ? 0.0 : -1.6;
@@ -275,7 +275,7 @@ export class VRManager {
 
   setupControllers() {
     const renderer = this.engine.renderer;
-    
+
     // Laser pointer geometry
     const laserGeometry = new THREE.BufferGeometry().setFromPoints([
       new THREE.Vector3(0, 0, 0),
@@ -325,7 +325,7 @@ export class VRManager {
       controller.addEventListener('selectend', (event) => this.onVRSelectEnd(controller, i, event));
       controller.addEventListener('squeezestart', (event) => this.onVRSqueezeStart(controller, event));
       controller.addEventListener('squeezeend', (event) => this.onVRSqueezeEnd(controller, event));
-      
+
       // Track connected state for debugging
       controller.addEventListener('connected', (event) => {
         const source = event.data;
@@ -337,7 +337,7 @@ export class VRManager {
           inputSource: source
         };
         console.log(`VRManager: Controller ${i} connected — ${source.handedness}, gamepad: ${!!source.gamepad}, profiles: [${(source.profiles || []).join(', ')}]`);
-        
+
         // Make controller model and laser visible
         controllerModel.visible = true;
         const l = controller.getObjectByName('laser');
@@ -419,7 +419,7 @@ export class VRManager {
     if (!controller) return new THREE.Ray();
     const tempMatrix = new THREE.Matrix4();
     tempMatrix.identity().extractRotation(controller.matrixWorld);
-    
+
     const ray = new THREE.Ray();
     ray.origin.setFromMatrixPosition(controller.matrixWorld);
     ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
@@ -435,7 +435,7 @@ export class VRManager {
     // 1. Primary: Direct 3D Sprite label button intersection
     this.engine.raycaster.ray.copy(ray);
     const intersects = this.engine.raycaster.intersectObjects(this.engine.spriteLabelsGroup.children, true);
-    
+
     let hitObject = null;
     for (const hit of intersects) {
       if (hit.object.isSprite && hit.object.userData && hit.object.userData.nameId) {
@@ -519,7 +519,7 @@ export class VRManager {
         if (uv) {
           const x = uv.x * 512;
           const y = (1 - uv.y) * 384;
-          
+
           this.triggerVRHaptic(controller, 0.45, 70);
           this.engine.handleVRControlClick(x, y);
           return;
@@ -528,19 +528,19 @@ export class VRManager {
     }
 
     const hit = this.raycastFromController(controller, controllerIndex);
-    
+
     if (hit) {
       this.triggerVRHaptic(controller, 0.4, 60);
-      
+
       // Toggle selection: if already selected, clear it
-      if (this.engine.selectedMesh && 
-          this.engine.selectedMesh.userData && 
-          this.engine.selectedMesh.userData.nameId === hit.nameId) {
+      if (this.engine.selectedMesh &&
+        this.engine.selectedMesh.userData &&
+        this.engine.selectedMesh.userData.nameId === hit.nameId) {
         this.engine.clearSelection();
       } else {
         this.engine.selectAnatomy(hit.nameId);
       }
-      
+
       // Flash the trigger indicator on the controller model
       this.flashTriggerIndicator(controllerIndex);
     } else {
@@ -598,13 +598,13 @@ export class VRManager {
     // Restore renderer transparency for desktop/AR mode
     this.engine.renderer.setClearColor(0x050a12, 1.0);
     this.engine.renderer.setClearAlpha(1.0);
-    
+
     // Remove environment
     if (this.vrEnvironment) {
       this.engine.scene.remove(this.vrEnvironment);
       this.vrEnvironment = null;
     }
-    
+
     // Remove controllers and camera from rig, restore camera to scene root
     if (this.cameraRig) {
       this.controllers.forEach(c => this.cameraRig.remove(c));
@@ -635,7 +635,7 @@ export class VRManager {
     }
     this.activeGrabbers = [];
     this.engine.isGrabbed = false;
-    
+
     document.body.classList.remove('xr-vr-active');
   }
 
@@ -667,7 +667,7 @@ export class VRManager {
         // Single controller grab: attach heart to controller for 6DoF movement
         controller.attach(this.engine.heartGroup);
         this.engine.isGrabbed = true;
-      } 
+      }
       else if (this.activeGrabbers.length === 2) {
         // Two-hand grab: enable pinch-to-scale
         this.engine.scene.attach(this.engine.heartGroup);
@@ -688,7 +688,7 @@ export class VRManager {
 
     if (this.activeGrabbers.length === 1) {
       this.activeGrabbers[0].attach(this.engine.heartGroup);
-    } 
+    }
     else if (this.activeGrabbers.length === 0) {
       if (this.engine.heartGroup) {
         this.engine.scene.attach(this.engine.heartGroup);
@@ -704,7 +704,7 @@ export class VRManager {
     if (this.activeGrabbers.length === 2 && this.engine.heartGroup) {
       const p1 = this.activeGrabbers[0].position;
       const p2 = this.activeGrabbers[1].position;
-      
+
       const midpoint = new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5);
       this.engine.heartGroup.position.copy(midpoint);
 
@@ -712,7 +712,7 @@ export class VRManager {
       if (this.initialGrabDist > 0.01) {
         const ratio = currentDist / this.initialGrabDist;
         const targetScale = Math.max(0.1, Math.min(ratio, 4.0));
-        
+
         this.engine.heartGroup.scale.copy(this.initialHeartScale).multiplyScalar(targetScale);
       }
     }
@@ -752,14 +752,14 @@ export class VRManager {
             if (checkClick(4)) {
               console.log("VRManager: Button A clicked. Toggling Heartbeat.");
               this.triggerVRHaptic(controllerObj, 0.45, 60);
-              
+
               const newState = !this.engine.isBeating;
               this.engine.setHeartbeatEnabled(newState);
               const beatSwitch = document.getElementById('switch-beat');
               if (beatSwitch) beatSwitch.checked = newState;
-              
+
               this.engine.updateVRControlPanel();
-              this.engine.showVRSimulationInfo("Heartbeat Animation", newState 
+              this.engine.showVRSimulationInfo("Heartbeat Animation", newState
                 ? "Heartbeat animation is now ACTIVE. The chambers contract and expand realistically simulating a cardiac cycle at the specified BPM rate."
                 : "Heartbeat animation has been PAUSED. The heart is in a static diastolic state, allowing close physical study of stationary structural relationships.");
             }
@@ -768,7 +768,7 @@ export class VRManager {
             if (checkClick(5)) {
               console.log("VRManager: Button B clicked. Toggling VR Controls Guide.");
               this.triggerVRHaptic(controllerObj, 0.45, 60);
-              
+
               if (this.engine.vrInfoPanel && this.engine.vrInfoPanel.visible) {
                 this.engine.clearSelection();
               } else {
@@ -782,12 +782,12 @@ export class VRManager {
             if (checkClick(4)) {
               console.log("VRManager: Button X clicked. Toggling Blood Flow.");
               this.triggerVRHaptic(controllerObj, 0.45, 60);
-              
+
               const newState = !this.engine.isFlowing;
               this.engine.setBloodFlowEnabled(newState);
               const flowSwitch = document.getElementById('switch-flow');
               if (flowSwitch) flowSwitch.checked = newState;
-              
+
               this.engine.updateVRControlPanel();
               this.engine.showVRSimulationInfo("Blood Flow Particle System", newState
                 ? "Blood Flow particle visualization is now ACTIVE. Crimson oxygenated cells and deep blue deoxygenated cells track directional flows inside the ventricles and vessels."
@@ -797,12 +797,12 @@ export class VRManager {
             if (checkClick(5)) {
               console.log("VRManager: Button Y clicked. Toggling Transparency.");
               this.triggerVRHaptic(controllerObj, 0.45, 60);
-              
+
               const newState = !this.engine.isTransparency;
               this.engine.setTransparencyMode(newState);
               const transSwitch = document.getElementById('switch-transparency');
               if (transSwitch) transSwitch.checked = newState;
-              
+
               this.engine.updateVRControlPanel();
               this.engine.showVRSimulationInfo("Transparency Mode", newState
                 ? "Transparency mode is now ACTIVE. Outer muscular tissue becomes translucent, revealing the internal chambers, valves, and blood flow paths in real-time."

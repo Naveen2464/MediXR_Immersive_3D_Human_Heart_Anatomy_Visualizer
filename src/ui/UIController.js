@@ -20,6 +20,7 @@ export class UIController {
     this.bindSelectionCallback();
     this.bindXRSessionTriggers();
     this.bindLoaderStartActions();
+    this.bindXRInteractionsFix();
   }
 
   // Bind side control panel switches
@@ -78,13 +79,7 @@ export class UIController {
       });
     }
 
-    // 7. Exploded Switch
-    const explodedSwitch = document.getElementById('switch-exploded');
-    if (explodedSwitch) {
-      explodedSwitch.addEventListener('change', (e) => {
-        this.engine.setExplodedMode(e.target.checked);
-      });
-    }
+
   }
 
   // Bind side control panel range inputs
@@ -174,11 +169,7 @@ export class UIController {
           this.engine.setTransparencyMode(false);
         }
 
-        const explodedSwitch = document.getElementById('switch-exploded');
-        if (explodedSwitch) {
-          explodedSwitch.checked = false;
-          this.engine.setExplodedMode(false);
-        }
+
 
         const diseaseSelect = document.getElementById('select-disease');
         if (diseaseSelect) {
@@ -419,6 +410,11 @@ export class UIController {
 
       const data = HeartData[nameId];
       if (!data) return;
+
+      // If we are in skeleton mode, switch to focused mode to make the heart clearly visible
+      if (this.engine.visualizerMode === 'skeleton') {
+        this.engine.setVisualizerMode('focused');
+      }
 
       // Highlight the corresponding anatomy label tag
       const labelEl = document.getElementById(`label-tag-${nameId}`);
@@ -694,5 +690,26 @@ export class UIController {
       toast.classList.remove('show');
       setTimeout(() => toast.remove(), 400);
     }, 2500);
+  }
+
+  // Fix touch/click interaction issues inside WebXR dom-overlay on mobile devices
+  bindXRInteractionsFix() {
+    const hudLayer = document.querySelector('.hud-layer');
+    if (!hudLayer) return;
+
+    const stopXRPropagation = (e) => {
+      // If the interaction is inside the HUD layer, stop it from propagating to the WebXR canvas / polyfill
+      if (hudLayer.contains(e.target)) {
+        e.stopPropagation();
+      }
+    };
+
+    // Intercept standard touch and pointer events in the capturing phase
+    window.addEventListener('touchstart', stopXRPropagation, { capture: true, passive: true });
+    window.addEventListener('touchend', stopXRPropagation, { capture: true, passive: true });
+    window.addEventListener('pointerdown', stopXRPropagation, { capture: true });
+    window.addEventListener('pointerup', stopXRPropagation, { capture: true });
+    window.addEventListener('mousedown', stopXRPropagation, { capture: true });
+    window.addEventListener('mouseup', stopXRPropagation, { capture: true });
   }
 }
