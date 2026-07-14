@@ -13,8 +13,8 @@ https://github.com/user-attachments/assets/04e8d562-664a-4bd5-9f39-86372eba08c5
 
 *   🖥️ **3D Desktop View:** Rotate, zoom, and click on heart structures to view clinical explanations.
 *   📱 **Augmented Reality (AR):** Place the 3D heart on any surface in your physical room.
-*   🥽 **Virtual Reality (VR):** Step into an immersive VR laboratory with laser pointer controls.
-*   🔄 **Anatomy Simulations:** Toggles for heartbeat pulsing, blood flow streams, cross-section slicing, translucent views, and exploded parts.
+*   🥽 **Virtual Reality (VR):** Step into an immersive VR laboratory with laser pointer controls. The entire heart remains fully visible and intact during structure selections to preserve spatial context.
+*   🔄 **Anatomy Simulations:** Toggles for heartbeat pulsing, blood flow streams, cross-section slicing, and translucent views.
 *   🫀 **Pathology States:** Simulate healthy heart flow, myocardial infarction (heart attack necrotic area), valve disease (leaky backflow), and hypertrophy (ventricular wall thickening).
 *   🎙️ **Voice Commands:** Control the app hands-free with voice recognition and text-to-speech audio feedback.
 
@@ -125,7 +125,7 @@ Click the microphone icon on the top right to start listening, then speak:
 *   **Blood Flow:** Enable particles representing oxygenated (red) and deoxygenated (blue) blood.
 *   **Cross-Section:** Slice the model open and slide the depth slider to view internal chambers.
 *   **Anatomy Labels:** Enable floating tags to identify parts.
-*   **Transparency & Exploded View:** Turn outer shells see-through or isolate individual structures.
+*   **Transparency Mode:** Turn outer shells see-through to view internal chambers, valves, and blood flow paths.
 
 ---
 
