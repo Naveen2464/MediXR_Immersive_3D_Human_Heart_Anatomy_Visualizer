@@ -71,7 +71,7 @@ export class VRManager {
       if (this.engine.heartGroup) {
         this.engine.scene.add(this.engine.heartGroup); // Ensure attached to main scene
         this.engine.heartGroup.position.set(0, 0.0, -2.5);
-        this.engine.heartGroup.scale.set(0.1, 0.1, 0.1);
+        // Preserve native scale set by Engine3D; do not override
         this.engine.heartGroup.visible = true; // Ensure visibility
       }
 

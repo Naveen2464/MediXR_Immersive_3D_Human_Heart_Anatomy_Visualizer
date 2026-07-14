@@ -125,6 +125,16 @@ export class Engine3D {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
+    // Cinematic tone mapping for photorealistic GLB models
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.2;
+    // Use sRGB output for accurate PBR texture colors
+    if (THREE.SRGBColorSpace !== undefined) {
+      this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    } else {
+      this.renderer.outputEncoding = THREE.sRGBEncoding; // Three.js r148 and earlier
+    }
+
     // Enable WebXR support
     this.renderer.xr.enabled = true;
 
@@ -136,33 +146,33 @@ export class Engine3D {
   }
 
   setupLights() {
-    // Ambient Light
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+    // Ambient Light — raised so GLB textures are not too dark
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
     this.scene.add(ambientLight);
 
     // Hemisphere Light (sky/ground color contrast)
-    const hemiLight = new THREE.HemisphereLight(0x00f0ff, 0x003366, 0.3);
+    const hemiLight = new THREE.HemisphereLight(0xfff5ee, 0x1a0a00, 0.4);
     hemiLight.position.set(0, 10, 0);
     this.scene.add(hemiLight);
 
-    // Directional Key Light (casting soft shadows)
-    const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+    // Directional Key Light (casting soft shadows) — bright white for PBR detail
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.8);
     dirLight.position.set(5, 8, 4);
     dirLight.castShadow = true;
-    dirLight.shadow.mapSize.width = 1024;
-    dirLight.shadow.mapSize.height = 1024;
+    dirLight.shadow.mapSize.width = 2048;
+    dirLight.shadow.mapSize.height = 2048;
     dirLight.shadow.camera.near = 0.5;
     dirLight.shadow.camera.far = 25;
     dirLight.shadow.bias = -0.001;
     this.scene.add(dirLight);
 
-    // Cyan Fill Light (adds biological/sci-fi glow)
-    const fillLight = new THREE.PointLight(0x00f0ff, 0.8, 12);
+    // Warm anatomical fill light (mimics clinical operating-room lighting)
+    const fillLight = new THREE.PointLight(0xff9966, 1.2, 14);
     fillLight.position.set(-4, 2, -2);
     this.scene.add(fillLight);
 
-    // Blue back Light
-    const backLight = new THREE.PointLight(0x0066ff, 1.2, 10);
+    // Cool back / rim light for depth
+    const backLight = new THREE.PointLight(0x99ccff, 0.8, 10);
     backLight.position.set(2, -2, -3);
     this.scene.add(backLight);
   }
@@ -339,17 +349,43 @@ export class Engine3D {
     }).then((heartGroup) => {
       this.heartGroup = heartGroup;
 
-      // Update label anchors if a realistic model with region mapping was loaded
+      // Update label anchors when a realistic model is loaded
       if (this.heartGroup.userData && this.heartGroup.userData.isRealisticModel) {
-        this.labelAnchors = {
-          left_ventricle: new THREE.Vector3(-1.0, -1.725, 1.15),
-          right_ventricle: new THREE.Vector3(1.0, -1.15, 1.44),
-          left_atrium: new THREE.Vector3(-1.29, 0.58, 0.58),
-          right_atrium: new THREE.Vector3(1.29, 0.72, 0.86),
-          aorta: new THREE.Vector3(-0.43, 2.3, 0.58),
-          pulmonary_artery: new THREE.Vector3(0.14, 1.29, 1.44),
-          vena_cava: new THREE.Vector3(1.58, 2.01, -0.29)
-        };
+        const computed = this.heartGroup.userData.computedAnchors;
+
+        if (computed && Object.keys(computed).length >= 4) {
+          // Use anchors extracted directly from each mesh's bounding box centre
+          console.log('Engine3D: Using auto-computed mesh-based label anchors.');
+          this.labelAnchors = {};
+          Object.entries(computed).forEach(([id, v]) => {
+            this.labelAnchors[id] = new THREE.Vector3(v.x, v.y, v.z);
+          });
+          // Fill any missing anatomy IDs with calibrated fallbacks
+          const fallback = {
+            left_ventricle:   new THREE.Vector3(-0.55, -1.0, 0.90),
+            right_ventricle:  new THREE.Vector3( 0.55, -0.6, 0.90),
+            left_atrium:      new THREE.Vector3(-0.55,  0.8, 0.20),
+            right_atrium:     new THREE.Vector3( 0.55,  0.8, 0.50),
+            aorta:            new THREE.Vector3(-0.20,  1.8, 0.30),
+            pulmonary_artery: new THREE.Vector3( 0.20,  1.5, 0.90),
+            vena_cava:        new THREE.Vector3( 0.80,  1.7,-0.20)
+          };
+          Object.entries(fallback).forEach(([id, v]) => {
+            if (!this.labelAnchors[id]) this.labelAnchors[id] = v;
+          });
+        } else {
+          // Calibrated fallback anchors matched to the realistic_human_heart.glb geometry
+          console.log('Engine3D: GLB has no named nodes — using calibrated fallback anchors.');
+          this.labelAnchors = {
+            left_ventricle:   new THREE.Vector3(-0.55, -1.0, 0.90),
+            right_ventricle:  new THREE.Vector3( 0.55, -0.6, 0.90),
+            left_atrium:      new THREE.Vector3(-0.55,  0.8, 0.20),
+            right_atrium:     new THREE.Vector3( 0.55,  0.8, 0.50),
+            aorta:            new THREE.Vector3(-0.20,  1.8, 0.30),
+            pulmonary_artery: new THREE.Vector3( 0.20,  1.5, 0.90),
+            vena_cava:        new THREE.Vector3( 0.80,  1.7,-0.20)
+          };
+        }
       }
 
       // Add particles as child of heartGroup so they scale/move together

@@ -89,7 +89,7 @@ export class ModelLoader {
    * @returns {Promise<THREE.Group>}
    */
   loadHeartModel(materials, onProgress) {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       const path = 'assets/models/realistic_human_heart.glb';
       console.log(`ModelLoader: Attempting to load realistic human heart GLB: ${path}`);
 
@@ -99,39 +99,20 @@ export class ModelLoader {
           console.log("ModelLoader: Realistic heart GLB loaded successfully!");
           const loadedModel = gltf.scene;
 
-          // Traverse and assign materials and userData names
+          // Traverse — keep GLB's original photorealistic materials; only set up shadows & userData
           loadedModel.traverse((node) => {
             if (node.isMesh) {
               node.castShadow = true;
               node.receiveShadow = true;
 
-              // Normalize names: map node name to closest anatomical ID
-              const normalizedName = this.normalizeMeshName(node.name);
-              if (normalizedName && materials[normalizedName]) {
-                node.material = materials[normalizedName];
-                node.name = normalizedName;
-                node.userData = {
-                  originalScale: node.scale.clone(),
-                  originalPosition: node.position.clone(),
-                  originalRotation: node.rotation.clone(),
-                  nameId: normalizedName
-                };
-              } else {
-                // If it's a generic node or heart wall, give it the left ventricle material
-                node.material = materials.left_ventricle.clone();
-                node.name = 'left_ventricle';
-                node.userData = {
-                  originalScale: node.scale.clone(),
-                  originalPosition: node.position.clone(),
-                  originalRotation: node.rotation.clone(),
-                  nameId: 'left_ventricle'
-                };
-              }
-
-              if (node.material) {
-                const mats = Array.isArray(node.material) ? node.material : [node.material];
-                mats.forEach(mat => {
-                  if (mat && !mat.userData.originalColor) {
+              // Make sure each material has physically-based rendering enabled
+              const mats = Array.isArray(node.material) ? node.material : [node.material];
+              mats.forEach(mat => {
+                if (mat) {
+                  // Ensure full PBR quality
+                  mat.needsUpdate = true;
+                  // Store original values for highlight/restore effects
+                  if (!mat.userData.originalColor) {
                     mat.userData = {
                       originalColor: mat.color ? mat.color.getHex() : 0xffffff,
                       originalOpacity: mat.opacity !== undefined ? mat.opacity : 1.0,
@@ -139,10 +120,23 @@ export class ModelLoader {
                       originalEmissiveIntensity: mat.emissiveIntensity !== undefined ? mat.emissiveIntensity : 0.0
                     };
                   }
-                });
-              }
+                }
+              });
+
+              // Map node name to anatomical ID for interactivity (labels, hover)
+              const normalizedName = this.normalizeMeshName(node.name);
+              const anatomyId = normalizedName || 'left_ventricle';
+              node.userData = {
+                ...node.userData,
+                originalScale: node.scale.clone(),
+                originalPosition: node.position.clone(),
+                originalRotation: node.rotation.clone(),
+                nameId: anatomyId
+              };
+              if (normalizedName) node.name = normalizedName;
             }
           });
+
 
           // Normalize scale of loaded model to a standard height of 1.6 units
           const heartBox = new THREE.Box3().setFromObject(loadedModel);
@@ -154,12 +148,58 @@ export class ModelLoader {
           // Center the loaded model's geometry
           loadedModel.updateMatrixWorld(true);
           const heartCenter = heartBox.getCenter(new THREE.Vector3());
-          loadedModel.position.set(-heartCenter.x * scaleFactor, -heartCenter.y * scaleFactor + 0.2, -heartCenter.z * scaleFactor);
+          loadedModel.position.set(
+            -heartCenter.x * scaleFactor,
+            -heartCenter.y * scaleFactor + 0.2,
+            -heartCenter.z * scaleFactor
+          );
 
           const wrapperGroup = new THREE.Group();
           wrapperGroup.name = "heart_model";
-          wrapperGroup.userData = { isRealisticModel: true };
           wrapperGroup.add(loadedModel);
+          // Force matrix update so local-space bounding box reads are accurate
+          wrapperGroup.updateMatrixWorld(true);
+
+          // ── Auto-compute label anchors from mesh bounding box centres ──
+          // This ensures labels point to the exact geometry regardless of GLB node names.
+          const anatomyIds = [
+            'left_ventricle', 'right_ventricle', 'left_atrium',
+            'right_atrium', 'aorta', 'pulmonary_artery', 'vena_cava'
+          ];
+          const computedAnchors = {};
+          const namedMeshes = {};
+
+          wrapperGroup.traverse(node => {
+            if (node.isMesh && node.userData && node.userData.nameId) {
+              const id = node.userData.nameId;
+              if (anatomyIds.includes(id)) {
+                if (!namedMeshes[id]) namedMeshes[id] = [];
+                namedMeshes[id].push(node);
+              }
+            }
+          });
+
+          anatomyIds.forEach(id => {
+            const meshes = namedMeshes[id];
+            if (meshes && meshes.length > 0) {
+              // Merge bounding boxes of all meshes with this id
+              const combined = new THREE.Box3();
+              meshes.forEach(m => {
+                const b = new THREE.Box3().setFromObject(m);
+                combined.union(b);
+              });
+              // Get center in wrapperGroup's local space
+              const worldCenter = combined.getCenter(new THREE.Vector3());
+              const localCenter = wrapperGroup.worldToLocal(worldCenter);
+              computedAnchors[id] = localCenter;
+              console.log(`ModelLoader: Anchor for "${id}" auto-computed at`, localCenter);
+            }
+          });
+
+          wrapperGroup.userData = {
+            isRealisticModel: true,
+            computedAnchors: Object.keys(computedAnchors).length > 0 ? computedAnchors : null
+          };
 
           if (onProgress) onProgress(100);
           resolve(wrapperGroup);
@@ -171,34 +211,10 @@ export class ModelLoader {
             onProgress(percent);
           }
         },
-        // Error callback — fall back to procedural model
+        // Error callback — abort loading; realistic model is mandatory
         (error) => {
-          console.warn("ModelLoader: Failed to load realistic heart GLB. Falling back to procedural model.", error);
-          const proceduralHeart = createProceduralHeart(materials);
-
-          proceduralHeart.traverse((node) => {
-            if (node.isMesh) {
-              node.castShadow = true;
-              node.receiveShadow = true;
-
-              if (node.material) {
-                const mats = Array.isArray(node.material) ? node.material : [node.material];
-                mats.forEach(mat => {
-                  if (mat && !mat.userData.originalColor) {
-                    mat.userData = {
-                      originalColor: mat.color ? mat.color.getHex() : 0xffffff,
-                      originalOpacity: mat.opacity !== undefined ? mat.opacity : 1.0,
-                      originalEmissive: mat.emissive ? mat.emissive.getHex() : 0x000000,
-                      originalEmissiveIntensity: mat.emissiveIntensity !== undefined ? mat.emissiveIntensity : 0.0
-                    };
-                  }
-                });
-              }
-            }
-          });
-
-          if (onProgress) onProgress(100);
-          resolve(proceduralHeart);
+          console.error("ModelLoader: Failed to load realistic heart GLB. Abort.", error);
+          reject(error);
         }
       );
     });
