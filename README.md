@@ -30,7 +30,6 @@ webxr_PROJECT/
 ├── index.html                     # Main HTML application layout, CDNs, and UI overlays
 ├── server.js                      # Custom HTTP/HTTPS Node.js dev server with auto-SSL
 ├── package.json                   # Project scripts and package configuration metadata
-├── realistic_human_heart.glb      # Root medically accurate GLB 3D heart model file
 ├── favicon.ico                    # Browser favicon icon
 │
 ├── certs/                         # SSL Certificate files for local HTTPS testing
@@ -88,8 +87,8 @@ webxr_PROJECT/
 Ensure you have [Node.js](https://nodejs.org/) installed, then run in your terminal:
 ```bash
 # Clone the repository
-git clone https://github.com/Naveen2464/heart.git
-cd heart
+git clone https://github.com/Naveen2464/MediXR_Immersive_3D_Human_Heart_Anatomy_Visualizer.git
+cd MediXR_Immersive_3D_Human_Heart_Anatomy_Visualizer
 
 # Run the local server
 npm run dev
