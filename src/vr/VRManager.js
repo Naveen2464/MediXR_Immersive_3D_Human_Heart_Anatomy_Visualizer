@@ -67,12 +67,12 @@ export class VRManager {
       this.setupControllers();
       this.engine.updateVRControlPanel();
 
-      // Reposition heart group in front of the VR camera (further away: z = -2.5)
+      // Reposition heart group in front of the VR camera
       if (this.engine.heartGroup) {
         this.engine.scene.add(this.engine.heartGroup); // Ensure attached to main scene
-        this.engine.heartGroup.position.set(0, 0.0, -2.5);
-        // Preserve native scale set by Engine3D; do not override
-        this.engine.heartGroup.visible = true; // Ensure visibility
+        this.engine.heartGroup.position.set(0, 0.6, 0);
+        this.engine.heartGroup.scale.set(0.15, 0.15, 0.15);
+        this.engine.heartGroup.visible = true;
       }
 
       // Query reference space asynchronously without blocking the main WebXR session startup thread

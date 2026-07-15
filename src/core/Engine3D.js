@@ -362,28 +362,33 @@ export class Engine3D {
           });
           // Fill any missing anatomy IDs with calibrated fallbacks
           const fallback = {
-            left_ventricle:   new THREE.Vector3(-0.55, -1.0, 0.90),
-            right_ventricle:  new THREE.Vector3( 0.55, -0.6, 0.90),
-            left_atrium:      new THREE.Vector3(-0.55,  0.8, 0.20),
-            right_atrium:     new THREE.Vector3( 0.55,  0.8, 0.50),
-            aorta:            new THREE.Vector3(-0.20,  1.8, 0.30),
-            pulmonary_artery: new THREE.Vector3( 0.20,  1.5, 0.90),
-            vena_cava:        new THREE.Vector3( 0.80,  1.7,-0.20)
+            // X-axis note: GLB heart has +X = viewer's RIGHT = patient's anatomical LEFT.
+            // Right structures (RA, RV, SVC) appear on the viewer's LEFT → negative X.
+            // Left structures (LA, LV, Aorta) appear on the viewer's RIGHT → positive X.
+            left_ventricle:   new THREE.Vector3( 0.20, -1.35, 1.10), // apex/lower body, viewer's right
+            right_ventricle:  new THREE.Vector3(-0.50, -0.65, 1.20), // front-left wall, viewer's left
+            left_atrium:      new THREE.Vector3( 0.70,  0.75, 0.10), // upper-right, slightly behind
+            right_atrium:     new THREE.Vector3(-0.65,  0.55, 0.65), // upper-left, front
+            aorta:            new THREE.Vector3( 0.25,  1.85, 0.25), // ascending arch top
+            pulmonary_artery: new THREE.Vector3(-0.15,  1.65, 0.75), // pulmonary trunk top
+            vena_cava:        new THREE.Vector3(-0.80,  1.50,-0.25)  // SVC, upper-left
           };
           Object.entries(fallback).forEach(([id, v]) => {
             if (!this.labelAnchors[id]) this.labelAnchors[id] = v;
           });
         } else {
-          // Calibrated fallback anchors matched to the realistic_human_heart.glb geometry
+          // X-axis: GLB heart +X = viewer's right = patient anatomical LEFT.
+          // Right structures appear on viewer's LEFT (negative X in local space).
+          // Left structures appear on viewer's RIGHT (positive X in local space).
           console.log('Engine3D: GLB has no named nodes — using calibrated fallback anchors.');
           this.labelAnchors = {
-            left_ventricle:   new THREE.Vector3(-0.55, -1.0, 0.90),
-            right_ventricle:  new THREE.Vector3( 0.55, -0.6, 0.90),
-            left_atrium:      new THREE.Vector3(-0.55,  0.8, 0.20),
-            right_atrium:     new THREE.Vector3( 0.55,  0.8, 0.50),
-            aorta:            new THREE.Vector3(-0.20,  1.8, 0.30),
-            pulmonary_artery: new THREE.Vector3( 0.20,  1.5, 0.90),
-            vena_cava:        new THREE.Vector3( 0.80,  1.7,-0.20)
+            left_ventricle:   new THREE.Vector3( 0.20, -1.35, 1.10), // lower body, viewer-right
+            right_ventricle:  new THREE.Vector3(-0.50, -0.65, 1.20), // front wall, viewer-left
+            left_atrium:      new THREE.Vector3( 0.70,  0.75, 0.10), // upper, viewer-right
+            right_atrium:     new THREE.Vector3(-0.65,  0.55, 0.65), // upper, viewer-left
+            aorta:            new THREE.Vector3( 0.25,  1.85, 0.25), // ascending arch
+            pulmonary_artery: new THREE.Vector3(-0.15,  1.65, 0.75), // pulmonary trunk
+            vena_cava:        new THREE.Vector3(-0.80,  1.50,-0.25)  // SVC upper-left
           };
         }
       }
@@ -446,9 +451,16 @@ export class Engine3D {
 
       if (this.skeletonGroup) {
         this.skeletonGroup.visible = true;
+        const isProcedural = this.skeletonGroup.userData && this.skeletonGroup.userData.isProcedural;
+        // Reset skeleton positions, rotations, and scales to standard landing defaults
+        this.skeletonGroup.position.set(0, isProcedural ? 0.3 : 0, 0);
+        this.skeletonGroup.rotation.set(0, 0, 0);
+        this.skeletonGroup.scale.set(1, 1, 1);
       }
       if (this.heartGroup) {
         this.heartGroup.visible = true; // Enforce heart visibility
+        // Reset rotation to align perfectly with the skeleton's ribcage
+        this.heartGroup.rotation.set(0, 0, 0);
 
         // Scale and position based on whether the skeleton is procedural or realistic
         const isProcedural = this.skeletonGroup && this.skeletonGroup.userData && this.skeletonGroup.userData.isProcedural;
@@ -470,6 +482,7 @@ export class Engine3D {
 
       // Camera target: chest area of skeleton (y=1.2)
       if (this.controls) {
+        this.camera.up.set(0, 1, 0); // Reset camera tilt/roll tracking from VR
         this.controls.target.set(0, 1.2, 0);
         this.camera.position.set(0, 1.2, 5.0);
       }
@@ -505,6 +518,7 @@ export class Engine3D {
 
       // Camera: look straight at origin so heart is dead-center
       if (this.controls && !isXR) {
+        this.camera.up.set(0, 1, 0); // Reset camera tilt/roll tracking
         if (this.appMode === 'ar' || this.appMode === 'vr' || this.appMode === 'xr') {
           this.controls.target.set(0, 0.6, 0);
           this.camera.position.set(0, 0.6, 3.8);
@@ -838,7 +852,8 @@ export class Engine3D {
       }
 
       if (this.appMode === 'vr') {
-        // VR Mode: Show the entire heart fully visible when information is showed, do not change any visibility/transparency
+        // VR Mode: Show the entire heart, keeping active transparency if enabled
+        const isRealistic = this.heartGroup.userData && this.heartGroup.userData.isRealisticModel;
         this.heartGroup.traverse(node => {
           if (node.isMesh) {
             node.visible = true;
@@ -846,7 +861,19 @@ export class Engine3D {
             mats.forEach(mat => {
               if (mat && mat.userData) {
                 const od = mat.userData;
-                if (od.originalOpacity !== undefined) mat.opacity = od.originalOpacity;
+                if (this.isTransparency) {
+                  const partName = node.userData ? node.userData.nameId : null;
+                  const isOuterWall = isRealistic ||
+                    (partName === 'left_ventricle' || partName === 'right_ventricle' ||
+                      partName === 'left_atrium' || partName === 'right_atrium');
+                  if (isOuterWall) {
+                    mat.opacity = 0.22;
+                  } else {
+                    if (od.originalOpacity !== undefined) mat.opacity = od.originalOpacity;
+                  }
+                } else {
+                  if (od.originalOpacity !== undefined) mat.opacity = od.originalOpacity;
+                }
                 if (od.originalEmissive !== undefined && mat.emissive) mat.emissive.setHex(od.originalEmissive);
                 if (od.originalEmissiveIntensity !== undefined && mat.emissiveIntensity !== undefined) {
                   mat.emissiveIntensity = od.originalEmissiveIntensity;
@@ -860,7 +887,8 @@ export class Engine3D {
           this.particles.visible = this.isFlowing;
         }
       } else {
-        // Desktop/AR: Completely hide non-selected parts to isolate the selected part
+        // Desktop/AR: Completely hide non-selected parts to isolate the selected part (or make them translucent if transparency mode is enabled)
+        const isRealistic = this.heartGroup.userData && this.heartGroup.userData.isRealisticModel;
         this.heartGroup.traverse(node => {
           if (node.isMesh) {
             const meshNameId = node.userData ? node.userData.nameId : null;
@@ -893,22 +921,41 @@ export class Engine3D {
                     mat.emissiveIntensity = Math.min(origIntensity * 2.0, 1.0);
                   }
                 } else {
-                  // Completely hide non-selected parts to isolate the selected part
-                  mat.transparent = true;
-                  mat.opacity = 0.0;
+                  if (this.isTransparency) {
+                    // Transparency mode is active: instead of hiding non-selected parts, make outer walls transparent
+                    const partName = node.userData ? node.userData.nameId : null;
+                    const isOuterWall = isRealistic ||
+                      (partName === 'left_ventricle' || partName === 'right_ventricle' ||
+                        partName === 'left_atrium' || partName === 'right_atrium');
+                    mat.transparent = true;
+                    mat.opacity = isOuterWall ? 0.22 : 0.0;
+                  } else {
+                    // Completely hide non-selected parts to isolate the selected part
+                    mat.transparent = true;
+                    mat.opacity = 0.0;
+                  }
                   if (mat.emissive) mat.emissive.setHex(0x000000);
                   if (mat.emissiveIntensity !== undefined) mat.emissiveIntensity = 0.0;
                 }
                 mat.needsUpdate = true;
               }
             });
-            node.visible = isMatch; // Only show matching meshes
+            if (this.isTransparency) {
+              // In transparency mode, all parts (including translucent walls) remain visible
+              const partName = node.userData ? node.userData.nameId : null;
+              const isOuterWall = isRealistic ||
+                (partName === 'left_ventricle' || partName === 'right_ventricle' ||
+                  partName === 'left_atrium' || partName === 'right_atrium');
+              node.visible = isMatch || isOuterWall;
+            } else {
+              node.visible = isMatch; // Only show matching meshes
+            }
           }
         });
 
-        // Temporarily hide particles while showing only one selected part
+        // Hide particles on desktop/AR when transparency is OFF and showing only one selected part
         if (this.particles) {
-          this.particles.visible = false;
+          this.particles.visible = this.isTransparency ? this.isFlowing : false;
         }
       }
 
@@ -927,13 +974,26 @@ export class Engine3D {
   // Helper: restore all mesh materials to their original opacity/emissive values
   _restoreAllMeshOpacities() {
     if (!this.heartGroup) return;
+    const isRealistic = this.heartGroup.userData && this.heartGroup.userData.isRealisticModel;
     this.heartGroup.traverse(node => {
       if (node.isMesh) {
         const mats = Array.isArray(node.material) ? node.material : [node.material];
         mats.forEach(mat => {
           if (mat && mat.userData) {
             const od = mat.userData;
-            if (od.originalOpacity !== undefined) mat.opacity = od.originalOpacity;
+            if (this.isTransparency) {
+              const partName = node.userData ? node.userData.nameId : null;
+              const isOuterWall = isRealistic ||
+                (partName === 'left_ventricle' || partName === 'right_ventricle' ||
+                  partName === 'left_atrium' || partName === 'right_atrium');
+              if (isOuterWall) {
+                mat.opacity = 0.22;
+              } else {
+                if (od.originalOpacity !== undefined) mat.opacity = od.originalOpacity;
+              }
+            } else {
+              if (od.originalOpacity !== undefined) mat.opacity = od.originalOpacity;
+            }
             if (od.originalEmissive !== undefined && mat.emissive) mat.emissive.setHex(od.originalEmissive);
             if (od.originalEmissiveIntensity !== undefined && mat.emissiveIntensity !== undefined) {
               mat.emissiveIntensity = od.originalEmissiveIntensity;
@@ -1056,7 +1116,7 @@ export class Engine3D {
       el.style.display = enabled ? 'flex' : 'none';
     });
     if (this.spriteLabelsGroup) {
-      this.spriteLabelsGroup.visible = (enabled && this.appMode !== 'desktop');
+      this.spriteLabelsGroup.visible = enabled;
     }
   }
 
@@ -1076,6 +1136,19 @@ export class Engine3D {
 
     // Force updates to ensure matrix operations have correct world coordinates
     this.heartGroup.updateMatrixWorld(true);
+
+    const isRealistic = this.heartGroup && this.heartGroup.userData && this.heartGroup.userData.isRealisticModel;
+
+    // Custom outward offsets to prevent overlapping and keep them outside the heart model
+    const customOffsets = {
+      left_ventricle:   new THREE.Vector3( 1.4, -0.6,  0.5), // Lower right
+      right_ventricle:  new THREE.Vector3(-1.4, -0.6,  0.5), // Lower left
+      left_atrium:      new THREE.Vector3( 1.6,  0.2, -0.2), // Upper right
+      right_atrium:     new THREE.Vector3(-1.6,  0.0,  0.2), // Upper left
+      aorta:            new THREE.Vector3( 0.9,  1.4,  0.2), // Symmetrical top right
+      pulmonary_artery: new THREE.Vector3(-0.9,  1.4,  0.4), // Symmetrical top left
+      vena_cava:        new THREE.Vector3(-1.8,  0.6, -0.6)  // Far upper left, cleared from PA
+    };
 
     Object.keys(this.labelAnchors).forEach(key => {
       const name = HeartData[key] ? HeartData[key].name : key;
@@ -1120,12 +1193,17 @@ export class Engine3D {
       const sprite = new THREE.Sprite(material);
 
       const anchor = this.labelAnchors[key];
-      // Offset the label slightly outward from the anchor for better readability
-      const labelOffset = anchor.clone().normalize().multiplyScalar(0.35);
-      const labelPos = anchor.clone().add(labelOffset);
+      let labelPos;
+      if (isRealistic) {
+        const offset = customOffsets[key];
+        labelPos = anchor.clone().add(offset || new THREE.Vector3());
+      } else {
+        const labelOffset = anchor.clone().normalize().multiplyScalar(0.35);
+        labelPos = anchor.clone().add(labelOffset);
+      }
       sprite.position.copy(labelPos);
 
-      // Scale sprite to fit the scene size beautifully at z=-2.2 distance
+      // Scale sprite to fit the scene size beautifully
       sprite.scale.set(0.9, 0.225, 1.0);
       sprite.renderOrder = 1000;
 
@@ -1157,16 +1235,24 @@ export class Engine3D {
     if (isXR) {
       // Hide HTML labels
       this.hideAllLabels();
-      // Show 3D scene labels
+      // Show 3D scene labels (both sprites and lines)
       if (this.spriteLabelsGroup) {
         this.spriteLabelsGroup.visible = this.showLabels;
+        this.spriteLabelsGroup.traverse(child => {
+          if (child.isSprite) child.visible = true;
+          if (child.isLine) child.visible = true;
+        });
       }
       return;
     }
 
-    // Hide 3D scene labels
+    // Desktop mode: Hide 3D sprites (text) but KEEP 3D lines visible as leader lines!
     if (this.spriteLabelsGroup) {
-      this.spriteLabelsGroup.visible = false;
+      this.spriteLabelsGroup.visible = this.showLabels;
+      this.spriteLabelsGroup.traverse(child => {
+        if (child.isSprite) child.visible = false; // Hide WebGL sprite text on desktop
+        if (child.isLine) child.visible = true;  // Keep 3D connecting lines visible!
+      });
     }
 
     if (!this.showLabels || !this.heartGroup) return;
@@ -1181,12 +1267,34 @@ export class Engine3D {
 
     const isRealistic = this.heartGroup.userData && this.heartGroup.userData.isRealisticModel;
 
+    // Custom outward offsets to match create3DLabels offsets
+    const customOffsets = {
+      left_ventricle:   new THREE.Vector3( 1.4, -0.6,  0.5), // Lower right
+      right_ventricle:  new THREE.Vector3(-1.4, -0.6,  0.5), // Lower left
+      left_atrium:      new THREE.Vector3( 1.6,  0.2, -0.2), // Upper right
+      right_atrium:     new THREE.Vector3(-1.6,  0.0,  0.2), // Upper left
+      aorta:            new THREE.Vector3( 0.9,  1.4,  0.2), // Symmetrical top right
+      pulmonary_artery: new THREE.Vector3(-0.9,  1.4,  0.4), // Symmetrical top left
+      vena_cava:        new THREE.Vector3(-1.8,  0.6, -0.6)  // Far upper left, cleared from PA
+    };
+
     Object.keys(this.labelAnchors).forEach(key => {
       const anchor = this.labelAnchors[key];
       const element = this.labelElements[key];
       if (!element) return;
 
       tempV.copy(anchor);
+
+      // Offset the projected coordinate to match the line's outer end point
+      if (isRealistic) {
+        const offset = customOffsets[key];
+        if (offset) {
+          tempV.add(offset);
+        }
+      } else {
+        const labelOffset = anchor.clone().normalize().multiplyScalar(0.35);
+        tempV.add(labelOffset);
+      }
 
       // If exploded view is enabled, apply outward scaling shift to anchors
       if (this.isExploded) {
@@ -1217,11 +1325,19 @@ export class Engine3D {
       const x = (tempV.x * widthHalf) + widthHalf;
       const y = -(tempV.y * heightHalf) + heightHalf;
 
+      // Clamp X so labels stay inside the visible viewport area.
+      // Left sidebar (System Controls) is ~340px wide; right edge leaves 20px margin.
+      const panelLeftEl = document.getElementById('panel-left');
+      const panelLeftWidth = (panelLeftEl && !panelLeftEl.classList.contains('collapsed'))
+        ? (panelLeftEl.offsetWidth + 20) : 20;
+      const clampedX = Math.max(panelLeftWidth + 10, Math.min(x, window.innerWidth - 100));
+      const clampedY = Math.max(30, Math.min(y, window.innerHeight - 30));
+
       // Apply positions to HTML elements
       element.style.opacity = '1';
       element.style.pointerEvents = 'auto';
-      element.style.left = `${x}px`;
-      element.style.top = `${y}px`;
+      element.style.left = `${clampedX}px`;
+      element.style.top = `${clampedY}px`;
     });
   }
 
@@ -1507,28 +1623,39 @@ export class Engine3D {
       this.setVisualizerMode('focused');
     }
 
-    const isRealistic = this.heartGroup.userData && this.heartGroup.userData.isRealisticModel;
+    if (this.selectedMesh && this.selectedMesh.userData && this.selectedMesh.userData._selectedNameId) {
+      // Re-run selectAnatomy to recalculate the visibility/opacities based on new transparency state
+      this.selectAnatomy(this.selectedMesh.userData._selectedNameId);
+    } else {
+      // No active selection: just set the normal transparency opacities
+      const isRealistic = this.heartGroup.userData && this.heartGroup.userData.isRealisticModel;
+      this.heartGroup.traverse(node => {
+        if (node.isMesh) {
+          const partName = node.userData ? node.userData.nameId : null;
+          const isOuterWall = isRealistic ||
+            (partName === 'left_ventricle' || partName === 'right_ventricle' ||
+              partName === 'left_atrium' || partName === 'right_atrium');
 
-    this.heartGroup.traverse(node => {
-      if (node.isMesh) {
-        const partName = node.userData ? node.userData.nameId : null;
-        // Semi-transparent outer surface, keep vessels/flow opaque
-        const isOuterWall = isRealistic ||
-          (partName === 'left_ventricle' || partName === 'right_ventricle' ||
-            partName === 'left_atrium' || partName === 'right_atrium');
-
-        if (isOuterWall) {
           const mats = Array.isArray(node.material) ? node.material : [node.material];
           mats.forEach(mat => {
             if (mat) {
-              mat.transparent = true;
-              mat.opacity = enabled ? 0.22 : (mat.userData && mat.userData.originalOpacity !== undefined ? mat.userData.originalOpacity : 1.0);
+              if (isOuterWall) {
+                mat.transparent = true;
+                mat.opacity = enabled ? 0.22 : (mat.userData && mat.userData.originalOpacity !== undefined ? mat.userData.originalOpacity : 1.0);
+              } else {
+                mat.transparent = true;
+                mat.opacity = mat.userData && mat.userData.originalOpacity !== undefined ? mat.userData.originalOpacity : 1.0;
+              }
               mat.needsUpdate = true;
             }
           });
+          node.visible = true;
         }
+      });
+      if (this.particles) {
+        this.particles.visible = this.isFlowing;
       }
-    });
+    }
   }
 
   // Toggles Exploded View to separate components or widen labels projection layout
@@ -1708,8 +1835,9 @@ export class Engine3D {
 
     // Helper text-wrap function
     const wrapText = (text, x, y, maxWidth, lineHeight) => {
-      ctx.font = '48px sans-serif'; // 16 * 3
-      ctx.fillStyle = '#e2e8f0';
+      ctx.font = 'bold 51px Outfit, sans-serif';
+      ctx.fillStyle = '#f0f4ff';
+      ctx.textAlign = 'left';
       const words = text.split(' ');
       let line = '';
       for (let n = 0; n < words.length; n++) {
@@ -1729,19 +1857,20 @@ export class Engine3D {
 
     let startY = 285; // 95 * 3
     ctx.fillStyle = '#a855f7'; // purple header
-    ctx.font = 'bold 48px Outfit, sans-serif'; // 16 * 3
+    ctx.font = 'bold 51px Outfit, sans-serif';
+    ctx.textAlign = 'left';
     ctx.fillText('ANATOMICAL FUNCTION', 90, startY);
-    startY = wrapText(data.function, 90, startY + 66, canvas.width - 180, 60) + 30; // 22*3, 60*3, 20*3, 10*3
+    startY = wrapText(data.function, 90, startY + 69, canvas.width - 180, 63) + 24;
 
     ctx.fillStyle = '#a855f7';
-    ctx.font = 'bold 48px Outfit, sans-serif';
+    ctx.font = 'bold 51px Outfit, sans-serif';
     ctx.fillText('CLINICAL SIGNIFICANCE', 90, startY);
-    startY = wrapText(data.clinical, 90, startY + 66, canvas.width - 180, 60) + 30;
+    startY = wrapText(data.clinical, 90, startY + 69, canvas.width - 180, 63) + 24;
 
     ctx.fillStyle = '#a855f7';
-    ctx.font = 'bold 48px Outfit, sans-serif';
+    ctx.font = 'bold 51px Outfit, sans-serif';
     ctx.fillText('BLOOD FLOW DESCRIPTION', 90, startY);
-    wrapText(data.explanation, 90, startY + 66, canvas.width - 180, 60);
+    wrapText(data.explanation, 90, startY + 69, canvas.width - 180, 63);
 
     // Update texture map and make visible in VR modes
     this.vrInfoPanel.material.map.needsUpdate = true;

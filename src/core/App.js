@@ -110,12 +110,12 @@ function setupXRSessionListeners() {
     // Re-enable local clipping for desktop mode
     engine.renderer.localClippingEnabled = true;
 
-    // Restore skeleton landing page view
-    engine.setVisualizerMode('skeleton');
-
-    // Call VR and AR managers teardowns to clean up floor grids, reticles, and platforms
+    // Call VR and AR managers teardowns first to clean up floor grids, reticles, platforms, and restore camera
     if (vrManager) vrManager.endSession();
     if (arManager) arManager.endSession();
+
+    // Restore skeleton landing page view
+    engine.setVisualizerMode('skeleton');
     
     // Expand panels back for desktop
     if (window.innerWidth >= 1024) {

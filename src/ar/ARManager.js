@@ -626,9 +626,6 @@ export class ARManager {
     // Reset background and heart transforms
     this.engine.scene.background = new THREE.Color(0x050a12);
     if (this.engine.heartGroup) {
-      this.engine.heartGroup.position.set(0, 0.2, 0);
-      this.engine.heartGroup.scale.set(1.0, 1.0, 1.0);
-      this.engine.heartGroup.rotation.set(0, 0, 0);
       this.engine.heartGroup.visible = true;
     }
     
